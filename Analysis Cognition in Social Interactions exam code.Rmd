@@ -1,0 +1,129 @@
+---
+title: "Analysis Cognition in Social Interaction exam"
+output: html_document
+---
+
+```{r}
+#Setup
+pacman::p_load(readr,tidyverse,ggplot2,lme4,dplyr,ggpubr,lmerTest)
+
+#Load experimental data
+data <- read_csv("data done.csv", col_types = cols(Condition = col_factor(levels = c("Hidden", "Open")), Condition_order = col_factor(levels = c("Hidden_1", "Hidden_2", "Open_1", "Open_2")), Dyad = col_factor(levels = c("1", "2", "3", "4")), Efficiency = col_number(), Performance = col_factor(levels = c("F", "S")), Task = col_skip(), Task_number = col_skip(), Task_solution = col_skip(), Task_type = col_factor(levels = c("Calculus", "Spelling", "Riddle"))))
+
+#Remove empty rows and columns
+data <- data[-c(41:88),]
+
+View(data)
+
+#Load survey data
+survey_data <- read_csv("survey data.csv", col_types = cols(Age = col_number(), Condition = col_factor(levels = c("Hidden", "Open")), Cooperation = col_number(), Dyad = col_factor(levels = c("1", 
+"2", "3", "4")), Function = col_number(), Gender = col_factor(levels = c("F", "M")), Satisfaction = col_number(), Work_performance = col_number(), X9 = col_skip()))
+
+#Remove empty rows
+s_data <- survey_data[-c(17:53),]
+
+#Add an aggregate score to the s_data df
+agg <- s_data
+cols <- c("Function", "Satisfaction", "Cooperation","Work_performance")
+agg$sum <- rowSums(agg[,cols])
+agg <- agg[,!names(agg) %in% cols]
+aggregate(sum~., data=agg, FUN=sum)
+s_data$Sum <- agg$sum
+
+View(s_data)
+```
+
+Descriptive statistics
+```{r}
+#Performance stats for each condition
+perf_stats_1 <- data %>% group_by(Condition) %>% count(Performance)
+perf_stats_1
+
+#Efficiency stats for each condition
+eff_stats_1 <- data %>% group_by(Condition) %>% summarise(mean(Efficiency),max(Efficiency), min(Efficiency))
+eff_stats_1
+84.10 - 63.15
+
+#Looking into condition order
+
+#Efficiency stats for condition order
+eff_stats_3 <- data %>% group_by(Condition_order) %>% summarise(mean(Efficiency),max(Efficiency), min(Efficiency))
+eff_stats_3
+
+#Performance stats for condition order
+perf_stats_3 <- data %>% group_by(Condition_order) %>% count(Performance)
+perf_stats_3
+
+#Survey data
+
+#Age, gender
+s_data %>% group_by(Condition) %>% summarise(mean(Age))
+s_data %>% group_by(Condition) %>% count(Gender)
+
+#Stats for survey questions
+sat_stats <- s_data %>% group_by(Condition) %>% summarise(mean(Function),mean(Satisfaction),mean(Cooperation),mean(Work_performance),mean(Sum),sd(Sum))
+sat_stats
+
+```
+
+
+Analysis
+```{r}
+#Investigate performance: 
+summary(glmer(Performance ~ Condition + (1 + Condition | Dyad) + (1 + Condition | Condition_order), data = data, family = binomial))
+
+#Investigate efficiency: 
+
+#Check for normality as sample <30
+d <- with(data, 
+        Efficiency[Condition == "Hidden"] - Efficiency[Condition == "Open"])
+# Shapiro-Wilk normality test for the differences
+shapiro.test(d) # => p-value = 0.4474
+#Normally distributed
+
+#Modelling
+summary(lmer(Efficiency ~ Condition  + (1 + Condition | Dyad) + (1 + Condition | Condition_order), data = data))
+
+#Condition order 
+summary(lm(Efficiency ~ Condition_order, data = data))
+summary(glm(Performance ~ Condition_order, data = data, family = "binomial"))
+
+#Satisfaction
+#Overall perception of interaction (function + satisfaction + cooperation + work performance)
+summary(lmer(Sum ~ Condition + (1 + Condition | Dyad), data = s_data))
+
+```
+
+Visualizations
+```{r}
+#Efficiency boxplot
+eff <- ggboxplot(data, x = "Condition", y = "Efficiency", 
+          color = "Condition",
+          order = c("Hidden", "Open"),
+          ylab = "Efficincy in sec.", xlab = "Conditions",
+          title = "Efficiency according to condition")
+eff
+
+#Performance barplot
+perf <- ggplot(data, aes(x = Performance, fill = Condition)) + 
+          geom_bar(position = "dodge", width = 0.4) + 
+          labs(title = "Performance according to condition", y = "Count")
+perf
+
+#Satisfaction boxplot
+sat <- ggboxplot(s_data, x = "Condition", y = "Sum", 
+          color = "Condition",
+          order = c("Hidden", "Open"),
+          ylab = "Pooled Likert scale responses", xlab = "Conditions",
+          title = "Overall satisfaction according to condition")
+sat
+
+```
+
+
+
+
+
+
+
+
